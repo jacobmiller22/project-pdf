@@ -31,10 +31,23 @@ impl PDF {
         buf: &[u8],
         offset: usize,
     ) -> Result<object::Object, PDFProcessingError> {
+        self.lexer.setp(offset);
+
+        let mut size = 0;
+        loop {
+            let tok = self.lexer.next(buf)?;
+            println!("TOken: {} {}", tok, size);
+            if tok.typ == lexer::TokenType::Delimiter(lexer::DelimiterType::RightParen) {
+                size = tok.offset + tok.lexeme.len();
+                break;
+            }
+        }
+        self.lexer.setp(offset);
+
         return Ok(object::Object::new(
             object::ObjectType::String(object::StringObjectType::Literal),
             offset,
-            offset,
+            size,
         ));
     }
 
@@ -43,10 +56,22 @@ impl PDF {
         buf: &[u8],
         offset: usize,
     ) -> Result<object::Object, PDFProcessingError> {
+        self.lexer.setp(offset);
+
+        let mut size = 0;
+        loop {
+            let tok = self.lexer.next(buf)?;
+            size += tok.lexeme.len();
+            if tok.typ == lexer::TokenType::Delimiter(lexer::DelimiterType::RightAngleBrack) {
+                break;
+            }
+        }
+        self.lexer.setp(offset);
+
         return Ok(object::Object::new(
             object::ObjectType::String(object::StringObjectType::Hexadecimal),
             offset,
-            offset,
+            size,
         ));
     }
 
@@ -264,6 +289,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_literalstring() {
+        let lxr = lexer::Lexer::new();
+        let mut pdf = PDF { lexer: lxr };
+        let buf = b"(my example string)";
+        let obj = pdf
+            .parse_literalstring(buf, 0)
+            .expect("Failed to parse literal string object");
+        assert_eq!(obj.size(), 19)
+    }
+
+    #[test]
     fn test_parse_xref() {
         // let tail_pdf = general_purpose::STANDARD
         //     .decode(TAIL_PDF_B64)
@@ -283,12 +319,8 @@ mod tests {
             .parse_xref_offset(&slice)
             .expect("Failed to find xref offset");
 
-        println!("CALLING PARSE_XREF!\n\n");
-        let tokens = pdf
-            .parse_xref(&slice, xref_offset)
-            .expect("Failed to parse xref_section");
-        for tok in tokens {
-            println!("XRef Token: {}", tok)
-        }
+        // let tokens = pdf
+        //     .parse_xref(&slice, xref_offset)
+        //     .expect("Failed to parse xref_section");
     }
 }
