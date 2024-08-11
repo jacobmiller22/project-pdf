@@ -6,12 +6,27 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
-#[derive(Debug, Clone)]
-pub struct PDFProcessingError;
+#[derive(Debug)]
+pub enum PDFProcessingError {
+    EOF(String),
+    General(String), // TODO: Remove this and replace with more concrete. For now, general error
+}
 
 impl fmt::Display for PDFProcessingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PDFProcessingError")
+        match *self {
+            PDFProcessingError::EOF(ref err) => write!(f, "Reached EOF: {}", err),
+            PDFProcessingError::General(ref err) => write!(f, "PDFProcessingError: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for PDFProcessingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match *self {
+            // Error cases involving std::error go here
+            _ => None,
+        }
     }
 }
 
@@ -34,9 +49,9 @@ trait Is<T> {
     fn is(v: T) -> bool;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-enum Whitespace {
+pub enum WhitespaceType {
     Null = 0,
     HorizontalTab = 9,
     LineFeed = 10,
@@ -45,31 +60,31 @@ enum Whitespace {
     Space = 32,
 }
 
-impl Is<&u8> for Whitespace {
+impl Is<&u8> for WhitespaceType {
     fn is(v: &u8) -> bool {
-        return Whitespace::try_from(v).is_ok();
+        return WhitespaceType::try_from(v).is_ok();
     }
 }
 
-impl TryFrom<&u8> for Whitespace {
+impl TryFrom<&u8> for WhitespaceType {
     type Error = ();
 
-    fn try_from(value: &u8) -> std::result::Result<Whitespace, ()> {
+    fn try_from(value: &u8) -> std::result::Result<WhitespaceType, ()> {
         match value {
-            0 => Ok(Whitespace::Null),
-            9 => Ok(Whitespace::HorizontalTab),
-            10 => Ok(Whitespace::LineFeed),
-            12 => Ok(Whitespace::FormFeed),
-            13 => Ok(Whitespace::CarriageReturn),
-            32 => Ok(Whitespace::Space),
+            0 => Ok(WhitespaceType::Null),
+            9 => Ok(WhitespaceType::HorizontalTab),
+            10 => Ok(WhitespaceType::LineFeed),
+            12 => Ok(WhitespaceType::FormFeed),
+            13 => Ok(WhitespaceType::CarriageReturn),
+            32 => Ok(WhitespaceType::Space),
             _ => Err(()),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-enum Delimiter {
+pub enum DelimiterType {
     //---------------------// Glyph:
     LeftParen = 40,        // (
     RightParen = 41,       // (
@@ -83,33 +98,34 @@ enum Delimiter {
     PercentSign = 37,      // %
 }
 
-impl Is<&u8> for Delimiter {
+impl Is<&u8> for DelimiterType {
     fn is(v: &u8) -> bool {
-        return Delimiter::try_from(v).is_ok();
+        return DelimiterType::try_from(v).is_ok();
     }
 }
 
-impl TryFrom<&u8> for Delimiter {
+impl TryFrom<&u8> for DelimiterType {
     type Error = ();
 
-    fn try_from(value: &u8) -> std::result::Result<Delimiter, ()> {
+    fn try_from(value: &u8) -> std::result::Result<DelimiterType, ()> {
         match value {
-            40 => Ok(Delimiter::LeftParen),
-            41 => Ok(Delimiter::RightParen),
-            60 => Ok(Delimiter::LeftAngleBrack),
-            62 => Ok(Delimiter::RightAngleBrack),
-            91 => Ok(Delimiter::LeftSquareBrack),
-            93 => Ok(Delimiter::RightSquareBrack),
-            123 => Ok(Delimiter::LeftCurlyBrack),
-            125 => Ok(Delimiter::RightCurlyBrack),
-            47 => Ok(Delimiter::Solidus),
-            37 => Ok(Delimiter::PercentSign),
+            40 => Ok(DelimiterType::LeftParen),
+            41 => Ok(DelimiterType::RightParen),
+            60 => Ok(DelimiterType::LeftAngleBrack),
+            62 => Ok(DelimiterType::RightAngleBrack),
+            91 => Ok(DelimiterType::LeftSquareBrack),
+            93 => Ok(DelimiterType::RightSquareBrack),
+            123 => Ok(DelimiterType::LeftCurlyBrack),
+            125 => Ok(DelimiterType::RightCurlyBrack),
+            47 => Ok(DelimiterType::Solidus),
+            37 => Ok(DelimiterType::PercentSign),
             _ => Err(()),
         }
     }
 }
 
-enum Keyword {
+#[derive(Debug, PartialEq, Eq)]
+pub enum KeywordType {
     True,
     False,
     Obj,
@@ -125,82 +141,87 @@ enum Keyword {
     Startxref,
 }
 
-impl Is<&[u8]> for Delimiter {
+impl Is<&[u8]> for DelimiterType {
     fn is(v: &[u8]) -> bool {
-        return Keyword::try_from(v).is_ok();
+        return KeywordType::try_from(v).is_ok();
     }
 }
 
-impl TryFrom<&[u8]> for Keyword {
+impl TryFrom<&[u8]> for KeywordType {
     type Error = ();
     fn try_from(value: &[u8]) -> std::result::Result<Self, ()> {
         match value {
-            b"true" => Ok(Keyword::True),
-            b"false" => Ok(Keyword::False),
-            b"obj" => Ok(Keyword::Obj),
-            b"endobj" => Ok(Keyword::Endobj),
-            b"null" => Ok(Keyword::Null),
-            b"stream" => Ok(Keyword::Stream),
-            b"endstream" => Ok(Keyword::Endstream),
-            b"r" => Ok(Keyword::R),
-            b"xref" => Ok(Keyword::Xref),
-            b"trailer" => Ok(Keyword::Trailer),
-            b"n" => Ok(Keyword::N),
-            b"f" => Ok(Keyword::F),
-            b"startxref" => Ok(Keyword::Startxref),
+            b"true" => Ok(KeywordType::True),
+            b"false" => Ok(KeywordType::False),
+            b"obj" => Ok(KeywordType::Obj),
+            b"endobj" => Ok(KeywordType::Endobj),
+            b"null" => Ok(KeywordType::Null),
+            b"stream" => Ok(KeywordType::Stream),
+            b"endstream" => Ok(KeywordType::Endstream),
+            b"r" => Ok(KeywordType::R),
+            b"xref" => Ok(KeywordType::Xref),
+            b"trailer" => Ok(KeywordType::Trailer),
+            b"n" => Ok(KeywordType::N),
+            b"f" => Ok(KeywordType::F),
+            b"startxref" => Ok(KeywordType::Startxref),
             _ => Err(()),
         }
     }
 }
 
-#[derive(Debug)]
-enum TokenType {
-    Delimiter(Delimiter),
-    Whitespace(Whitespace),
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenType {
+    Delimiter(DelimiterType),
+    Whitespace(WhitespaceType),
+    Keyword(KeywordType),
     Regular,
-}
-
-enum NumericObject {
-    Integer,
-    Real,
-}
-
-enum StringObject {
-    Literal,
-    Hexadecimal,
-}
-
-enum Object {
-    Boolean,
-    Numeric(NumericObject),
-    String(StringObject),
-    Name,
-    Array,
-    Dictionary,
-    Stream,
-    Null,
 }
 
 #[derive(Debug)]
 pub struct Token<'a> {
-    lexeme: &'a [u8],
-    offset: usize,
-    typ: TokenType,
+    pub lexeme: &'a [u8],
+    pub offset: usize,
+    pub typ: TokenType,
 }
 
-pub struct Lexer<'a> {
+impl<'a> fmt::Display for Token<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Convert lexeme (which is a byte slice) to a string for display
+        let lexeme_str = match std::str::from_utf8(self.lexeme) {
+            Ok(v) => v,
+            Err(_) => "<invalid UTF-8>",
+        };
+
+        write!(
+            f,
+            "Token {{ lexeme: '{}', offset: {}, type: {:?} }}",
+            lexeme_str, self.offset, self.typ
+        )
+    }
+}
+
+pub struct Lexer {
     p: usize,
-    buf: &'a [u8],
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(buf: &[u8]) -> Lexer {
-        return Lexer { p: 0, buf };
+impl<'a> Lexer {
+    pub fn new() -> Lexer {
+        return Lexer { p: 0 };
+    }
+
+    /// Move the position of the lexer
+    pub fn setp(&mut self, p: usize) {
+        self.p = p
+    }
+
+    /// Get the position of the lexer
+    pub fn getp(&mut self) -> usize {
+        return self.p;
     }
 
     /// Grabs the next token and moves pointer p forward
-    pub fn next(&mut self) -> Result<Token> {
-        let tok = self.next_token()?;
+    pub fn next(&mut self, buf: &'a [u8]) -> Result<Token<'a>> {
+        let tok = self.peek(buf)?;
 
         self.p = tok.offset + tok.lexeme.len();
 
@@ -209,7 +230,7 @@ impl<'a> Lexer<'a> {
 
     /// Grabs the next token based on the pointer p
     ///
-    fn next_token(&self) -> Result<Token<'a>> {
+    pub fn peek(&self, buf: &'a [u8]) -> Result<Token<'a>> {
         // 4 Cases
         //
         //  1. Starts with EOF
@@ -221,34 +242,50 @@ impl<'a> Lexer<'a> {
         //  4. Starts with Regular
         //      Loop at p+1 until non regular char is reached (EOF, Delimiter, Whitespace),
         //      incrementing token if regular character.
+        //  5. Token is a  keyword
+        //      return a keyword token
+        //  6.
         //      Return Regular token
-        //
 
-        if self.p >= self.buf.len() {
-            println!("next_token p == len");
-            return Err(PDFProcessingError);
+        if self.p >= buf.len() {
+            return Err(PDFProcessingError::EOF("".to_string()));
         }
 
         let mut start = self.p;
 
-        // Skip whitespace
-        while start < self.buf.len() && Whitespace::is(&self.buf[start]) {
+        // Skip literal whitespace
+        while start < buf.len()
+            // && WhitespaceType::is(&buf[start])
+            && buf[start] == (WhitespaceType::Space as u8)
+        {
             start += 1;
         }
 
-        if start == self.buf.len() {
+        if start == buf.len() {
             return Ok(Token {
-                lexeme: &self.buf[self.p..start],
+                lexeme: &buf[self.p..start],
                 offset: self.p,
-                typ: TokenType::Whitespace(Whitespace::FormFeed),
+                typ: TokenType::Whitespace(WhitespaceType::FormFeed),
             });
         }
 
+        // Check for WhitespaceType
+        match WhitespaceType::try_from(&buf[start]) {
+            Ok(whitespace) => {
+                return Ok(Token {
+                    lexeme: &buf[start..start + 1],
+                    offset: start,
+                    typ: TokenType::Whitespace(whitespace),
+                });
+            }
+            Err(_) => (), // nop
+        };
+
         // Check for delimiter
-        match Delimiter::try_from(&self.buf[start]) {
+        match DelimiterType::try_from(&buf[start]) {
             Ok(delim) => {
                 return Ok(Token {
-                    lexeme: &self.buf[start..start + 1],
+                    lexeme: &buf[start..start + 1],
                     offset: start,
                     typ: TokenType::Delimiter(delim),
                 });
@@ -256,17 +293,27 @@ impl<'a> Lexer<'a> {
             Err(_) => (), // nop
         };
 
-        // Regular, Increment end until EOF, Delimiter, or Whitespace.
+        // Increment end until EOF, Delimiter, or Whitespace.
         let mut end = start + 1;
 
-        while end < self.buf.len() {
-            if Whitespace::is(&self.buf[end]) || Delimiter::is(&self.buf[end]) {
+        while end < buf.len() {
+            if WhitespaceType::is(&buf[end]) || DelimiterType::is(&buf[end]) {
                 break;
             }
             end += 1;
         }
+
+        // If keyword
+        if let Ok(kw) = KeywordType::try_from(&buf[start..end]) {
+            return Ok(Token {
+                lexeme: &buf[start..end],
+                offset: start,
+                typ: TokenType::Keyword(kw),
+            });
+        }
+        // If keyword
         return Ok(Token {
-            lexeme: &self.buf[start..end],
+            lexeme: &buf[start..end],
             offset: start,
             typ: TokenType::Regular,
         });
@@ -283,15 +330,15 @@ mod tests {
         assert_eq!(result, 4);
     }
 
-    #[test]
-    fn creates_tokens() {
-        let data = b"%PDF-1.7
-<</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/ID[<2B551D2AFE52654494F9720283CFF1C4><564250FCF6F74BD99ACAC7DAC72EBAC4>]/Index[90856 1006]/Info 90855 0 R/Length 176/Prev 14751032/Root 90857 0 R/Size 91862/Type/XRef/W[1 3 1]>>";
-
-        let mut lexer = Lexer { buf: data, p: 0 };
-
-        while let Ok(tok) = lexer.next() {
-            println!("lexer.next_token(): {:?}", tok);
-        }
-    }
+    //     #[test]
+    //     fn creates_tokens() {
+    //         let data = b"%PDF-1.7
+    // <</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/ID[<2B551D2AFE52654494F9720283CFF1C4><564250FCF6F74BD99ACAC7DAC72EBAC4>]/Index[90856 1006]/Info 90855 0 R/Length 176/Prev 14751032/Root 90857 0 R/Size 91862/Type/XRef/W[1 3 1]>>";
+    //
+    //         let mut lexer = Lexer { p: 0 };
+    //
+    //         while let Ok(tok) = lexer.next(data) {
+    //             println!("lexer.next_token(): {:?}", tok);
+    //         }
+    //     }
 }
