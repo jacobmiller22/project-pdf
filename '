@@ -149,7 +149,7 @@ impl PDF {
         offset: usize,
     ) -> Result<object::ObjectBuilder, PDFProcessingError> {
         return Ok(ObjectBuilder::new()
-            .typ(object::ObjectType::Array)
+            .typ(object::ObjectType::Dictionary)
             .offset(offset)
             .size(offset));
     }
@@ -168,7 +168,7 @@ impl PDF {
         self.lexer.setp(offset);
         let next_token = self.lexer.peek(buf)?;
 
-        let builder: Result<object::ObjectBuilder, PDFProcessingError> = match next_token.typ {
+        let builder = match next_token.typ {
             lexer::TokenType::Delimiter(lexer::DelimiterType::LeftParen) => {
                 self.parse_literalstring(buf, offset)
             }
@@ -181,12 +181,11 @@ impl PDF {
                     == lexer::TokenType::Delimiter(lexer::DelimiterType::LeftAngleBrack)
                 {
                     // Found a dictionary
-                    self.parse_dictionary(buf, offset)
-                } else {
-                    // No dictionary found, reset the lexer pointer
-                    self.lexer.setp(offset);
-                    self.parse_hexstring(buf, offset)
+                    return self.parse_dictionary(buf, offset);
                 }
+                // No dictionary found, reset the lexer pointer
+                self.lexer.setp(offset);
+                return self.parse_hexstring(buf, offset);
             }
             lexer::TokenType::Delimiter(lexer::DelimiterType::Solidus) => {
                 self.parse_nameobject(buf, offset)
@@ -194,16 +193,16 @@ impl PDF {
             lexer::TokenType::Delimiter(lexer::DelimiterType::LeftSquareBrack) => {
                 self.parse_array(buf, offset)
             }
-            lexer::TokenType::Keyword(lexer::KeywordType::True) => Ok(object::ObjectBuilder::new()
-                .typ(object::ObjectType::Boolean(true))
-                .offset(offset)
-                .size(offset + 4)),
-            lexer::TokenType::Keyword(lexer::KeywordType::False) => {
-                Ok(object::ObjectBuilder::new()
-                    .typ(object::ObjectType::Boolean(true))
-                    .offset(offset)
-                    .size(offset + 5))
-            }
+            lexer::TokenType::Keyword(lexer::KeywordType::True) => Ok(object::Object::new(
+                object::ObjectType::Boolean(true),
+                offset,
+                offset + 4,
+            )),
+            lexer::TokenType::Keyword(lexer::KeywordType::False) => Ok(object::Object::new(
+                object::ObjectType::Boolean(false),
+                offset,
+                offset + 5,
+            )),
             lexer::TokenType::Regular => {
                 // Check if this object is labeled as an indirect object
                 self.lexer.next(buf)?;
@@ -215,16 +214,11 @@ impl PDF {
                     self.lexer.setp(offset); // Restore the lexer pointer
                 }
 
-                self.parse_numericobject(buf, offset)
+                return self.parse_numericobject(buf, offset);
             }
             _ => Err(PDFProcessingError::General(
                 "Missing xref offset at EOF".to_string(),
             )),
-        };
-
-        return match builder?.build() {
-            Ok(o) => Ok(o),
-            Err(_) => Err(PDFProcessingError::General("".to_string())),
         };
     }
 

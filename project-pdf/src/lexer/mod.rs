@@ -215,16 +215,14 @@ impl<'a> Lexer {
     }
 
     /// Get the position of the lexer
-    pub fn getp(&mut self) -> usize {
+    pub fn getp(&self) -> usize {
         return self.p;
     }
 
     /// Grabs the next token and moves pointer p forward
     pub fn next(&mut self, buf: &'a [u8]) -> Result<Token<'a>> {
         let tok = self.peek(buf)?;
-
         self.p = tok.offset + tok.lexeme.len();
-
         return Ok(tok);
     }
 
@@ -325,20 +323,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn identifies_delimiters() {
+        let data = b"()<>[]{}/%";
+
+        let mut lexer = Lexer { p: 0 };
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.typ, TokenType::Delimiter(DelimiterType::LeftParen));
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.typ, TokenType::Delimiter(DelimiterType::RightParen));
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::LeftAngleBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::RightAngleBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::LeftSquareBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::RightSquareBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::LeftCurlyBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(
+            token.typ,
+            TokenType::Delimiter(DelimiterType::RightCurlyBrack)
+        );
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.typ, TokenType::Delimiter(DelimiterType::Solidus));
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.typ, TokenType::Delimiter(DelimiterType::PercentSign));
+        let token = lexer.next(data);
+        assert!(token.is_err())
     }
 
-    //     #[test]
-    //     fn creates_tokens() {
-    //         let data = b"%PDF-1.7
-    // <</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/ID[<2B551D2AFE52654494F9720283CFF1C4><564250FCF6F74BD99ACAC7DAC72EBAC4>]/Index[90856 1006]/Info 90855 0 R/Length 176/Prev 14751032/Root 90857 0 R/Size 91862/Type/XRef/W[1 3 1]>>";
-    //
-    //         let mut lexer = Lexer { p: 0 };
-    //
-    //         while let Ok(tok) = lexer.next(data) {
-    //             println!("lexer.next_token(): {:?}", tok);
-    //         }
-    //     }
+    #[test]
+    fn has_correct_offsets_with_multichars() {
+        let data = b"\\ \n \t \r";
+        let mut lexer = Lexer { p: 0 };
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.offset, 0);
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.offset, 2);
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.offset, 4);
+        let token = lexer.next(data).expect("Token was not ok");
+        assert_eq!(token.offset, 6);
+        let token = lexer.next(data);
+        assert!(token.is_err())
+    }
 }
